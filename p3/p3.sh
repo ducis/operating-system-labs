@@ -1,0 +1,14 @@
+cp callnr.h /usr/src/include/minix/callnr.h
+cp fcntl.h /usr/src/include/fcntl.h
+cp _open.c /usr/src/lib/libc/posix/_open.c
+cp open.c /usr/src/servers/vfs/open.c
+cp proto.h /usr/src/servers/vfs/proto.h
+cp table.c /usr/src/servers/vfs/table.c
+cp vfsif.h /usr/src/include/minix/vfsif.h
+cp request.c /usr/src/servers/vfs/request.c
+cp m/proto.h /usr/src/servers/mfs/proto.h
+cp m/read.c /usr/src/servers/mfs/read.c
+cp m/table.c /usr/src/servers/mfs/table.c
+cp h/table.c /usr/src/servers/hgfs/table.c
+cp i/table.c /usr/src/servers/iso9660fs/table.c
+cp p/table.c /usr/src/servers/pfs/table.c

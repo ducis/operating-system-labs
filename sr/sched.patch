@@ -1,0 +1,386 @@
+diff -c -r src.clean/kernel/proc.c src/kernel/proc.c
+*** src.clean/kernel/proc.c	Mon Oct 31 02:30:47 2011
+--- src/kernel/proc.c	Mon Oct 31 01:30:07 2011
+***************
+*** 119,124 ****
+--- 119,125 ----
+  	 * current process wasn' runnable, we pick a new one here
+  	 */
+  not_runnable_pick_new:
++ 	if (!proc_kernel_scheduler(proc_ptr) && priv(proc_ptr)->s_flags & PREEMPTIBLE)  notify_scheduler(proc_ptr);
+  	if (proc_is_preempted(proc_ptr)) {
+  		proc_ptr->p_rts_flags &= ~RTS_PREEMPTED;
+  		if (proc_is_runnable(proc_ptr)) {
+***************
+*** 1400,1406 ****
+  	assert(!proc_kernel_scheduler(p));
+  
+  	/* dequeue the process */
+! 	RTS_SET(p, RTS_NO_QUANTUM);
+  	/*
+  	 * Notify the process's scheduler that it has run out of
+  	 * quantum. This is done by sending a message to the scheduler
+--- 1401,1407 ----
+  	assert(!proc_kernel_scheduler(p));
+  
+  	/* dequeue the process */
+! 	/*RTS_SET(p, RTS_NO_QUANTUM);*/
+  	/*
+  	 * Notify the process's scheduler that it has run out of
+  	 * quantum. This is done by sending a message to the scheduler
+***************
+*** 1419,1425 ****
+  {
+  	if (!proc_kernel_scheduler(p) && priv(p)->s_flags & PREEMPTIBLE) {
+  		/* this dequeues the process */
+! 		notify_scheduler(p);
+  	}
+  	else {
+  		/*
+--- 1420,1427 ----
+  {
+  	if (!proc_kernel_scheduler(p) && priv(p)->s_flags & PREEMPTIBLE) {
+  		/* this dequeues the process */
+! 		RTS_SET(p, RTS_NO_QUANTUM);
+! 		/*notify_scheduler(p);*/
+  	}
+  	else {
+  		/*
+diff -c -r src.clean/servers/pm/schedule.c src/servers/pm/schedule.c
+*** src.clean/servers/pm/schedule.c	Mon Oct 31 03:13:36 2011
+--- src/servers/pm/schedule.c	Mon Oct 31 01:30:07 2011
+***************
+*** 16,21 ****
+--- 16,23 ----
+  	struct mproc *trmp;
+  	int proc_nr;
+  
++ 	printf("-------------------sched_init() of pm\n");
++ 
+  	for (proc_nr=0, trmp=mproc; proc_nr < NR_PROCS; proc_nr++, trmp++) {
+  		/* Don't take over system processes. When the system starts,
+  		 * this will typically only take over init, from which other
+***************
+*** 37,42 ****
+--- 39,46 ----
+  {
+  	int rv;
+  	message m;
++ 
++ 	/*printf("-------------------sched_start() of pm\n");*/
+  
+  	m.SCHEDULING_ENDPOINT	= rmp->mp_endpoint;
+  	m.SCHEDULING_PARENT	= mproc[rmp->mp_parent].mp_endpoint;
+diff -c -r src.clean/servers/sched/main.c src/servers/sched/main.c
+*** src.clean/servers/sched/main.c	Mon Oct 31 03:14:11 2011
+--- src/servers/sched/main.c	Mon Oct 31 01:30:07 2011
+***************
+*** 8,13 ****
+--- 8,15 ----
+  
+  #include "sched.h"
+  #include "schedproc.h"
++ #include <stdlib.h>
++ /*#include <time.h>*/
+  
+  /* Declare some local functions. */
+  FORWARD _PROTOTYPE( void reply, (endpoint_t whom, message *m_ptr)	);
+***************
+*** 25,40 ****
+--- 27,52 ----
+  	int result;	/* result to system call */
+  	int rv;
+  
++ 	srand( 5716 );
++ 	last_lucky_one = NULL;
++ 
+  	/* SEF local startup. */
+  	sef_local_startup();
+  
+  	/* Initialize scheduling timers, used for running balance_queues */
+  	init_scheduling();
++ 	{
++ 		int i;
++ 		for(i=0;i<3;++i){
++ 			printf("I printf 3 replicate messages to show that this new sched %s works.\n",__TIME__);
++ 		}
++ 	}
+  
+  	/* This is SCHED's main loop - get work and do it, forever and forever. */
+  	while (TRUE) {
+  		int ipc_status;
+  
++ 		/*printf( "sched running\n" );*/
+  		/* Wait for the next message and extract useful information from it. */
+  		if (sef_receive_status(ANY, &m_in, &ipc_status) != OK)
+  			panic("SCHED sef_receive error");
+***************
+*** 46,59 ****
+--- 58,74 ----
+  			switch(who_e) {
+  				case CLOCK:
+  					sched_expire_timers(m_in.NOTIFY_TIMESTAMP);
++ 					/*printf( "sched_expire_timers\n" );*/
+  					continue;	/* don't reply */
+  				default :
+  					result = ENOSYS;
+  			}
+  
++ 			/*printf( "sched goto sendreply\n" );*/
+  			goto sendreply;
+  		}
+  
++ 		/*printf( "sched switch(call_nr)\n" );*/
+  		switch(call_nr) {
+  		case SCHEDULING_START:
+  			result = do_start_scheduling(&m_in);
+diff -c -r src.clean/servers/sched/schedproc.h src/servers/sched/schedproc.h
+*** src.clean/servers/sched/schedproc.h	Mon Oct 31 03:14:17 2011
+--- src/servers/sched/schedproc.h	Mon Oct 31 01:30:07 2011
+***************
+*** 30,32 ****
+--- 30,43 ----
+  
+  /* Flag values */
+  #define IN_USE		0x00001	/* set when 'schedproc' slot in use */
++ 
++ #define LOTTERIED	0x00002
++ 
++ 
++ 
++ 
++ /*lottery mod configuration*/
++ #define UNLUCKY_Q	15
++ #define LUCKY_Q 14
++ 
++ EXTERN struct schedproc *last_lucky_one;
+diff -c -r src.clean/servers/sched/schedule.c src/servers/sched/schedule.c
+*** src.clean/servers/sched/schedule.c	Mon Oct 31 03:14:18 2011
+--- src/servers/sched/schedule.c	Mon Oct 31 10:28:16 2011
+***************
+*** 7,17 ****
+--- 7,24 ----
+   *   do_nice		  Request from PM to change the nice level on a proc
+   *   init_scheduling      Called from main.c to set up/prepare scheduling
+   */
++ 
+  #include "sched.h"
+  #include "schedproc.h"
+  #include <minix/com.h>
+  #include <machine/archtypes.h>
+  #include "kernel/proc.h" /* for queue constants */
++ #include "kernel/const.h"
++ #include "kernel/priv.h"
++ #include <minix/syslib.h>
++ #include <stdlib.h>
++ #include "assert.h"
++ 
+  
+  PRIVATE timer_t sched_timer;
+  PRIVATE unsigned balance_timeout;
+***************
+*** 23,28 ****
+--- 30,85 ----
+  
+  #define DEFAULT_USER_TIME_SLICE 200
+  
++ /*#define SET_LOT_TIMER sched_set_timer(&sched_timer, sys_hz(), timed_draw_lots, 0);*/
++ 
++ PRIVATE int draw_lots(struct schedproc *bad){
++ 	int rv, proc_nr_n;
++ 	int total = 0,which;
++ 	register struct schedproc *itr = 0;
++ 	/*printf( "==============draw_lots()\n" );*/
++ #define TRAVERSE for (proc_nr_n=0, itr=schedproc; proc_nr_n < NR_PROCS; ++proc_nr_n, ++itr)
++ #define IF_GOOD if( (itr->flags & LOTTERIED) && (itr!=bad) )
++ #define SET_LUCK( P,L )     rv = sys_schedule((P)->endpoint,(L),(P)->time_slice); if( rv!=OK ) { printf( "failed to sys_schedule() at line %d\n", __LINE__ ); return rv; }
++ #define LUCK(P)    SET_LUCK( P , LUCKY_Q )
++ #define UNLUCK(P)  SET_LUCK( P , UNLUCKY_Q )
++ 	if(bad&&(bad->flags & LOTTERIED)){
++ 		assert(bad->flags & IN_USE);
++ 		UNLUCK(bad);
++ 	}
++ 	TRAVERSE{
++ 		IF_GOOD{
++ 			assert(itr->flags & IN_USE);
++ 			total+=itr->priority;
++ 		}
++ 	}
++ 	if(total){
++ 		which = (rand()*(RAND_MAX+1)+rand())%total;
++ 		TRAVERSE{
++ 			IF_GOOD{
++ 				assert(itr->flags & IN_USE);
++ 				if(which<itr->priority){
++ 					break;
++ 				}else{
++ 					which-=itr->priority;
++ 				}
++ 			}
++ 		}
++ 		assert(itr);
++ 		assert(itr<schedproc+NR_PROCS);
++ 		assert(itr->flags & LOTTERIED);
++ 		assert(itr->flags & IN_USE);
++ 		if(last_lucky_one != itr){
++ 			if(last_lucky_one){
++ 				UNLUCK(last_lucky_one);
++ 				last_lucky_one = NULL;
++ 			}
++ 			LUCK(itr);
++ 			last_lucky_one = itr;
++ 		}
++ 	}
++ 	return OK;
++ }
++ 
+  /*===========================================================================*
+   *				do_noquantum				     *
+   *===========================================================================*/
+***************
+*** 39,44 ****
+--- 96,110 ----
+  	}
+  
+  	rmp = &schedproc[proc_nr_n];
++ 
++ 	if( OK != (rv = draw_lots(rmp)) ){
++ 		return rv;
++ 	}
++ 
++ 	if(rmp->flags & LOTTERIED){
++ 		/*printf("****************LOTTERIED procs hits do_noquatum(), which shouldn't happen\n");*/
++ 		return OK;
++ 	}
+  	if (rmp->priority < MIN_USER_Q) {
+  		rmp->priority += 1; /* lower priority */
+  	}
+***************
+*** 81,90 ****
+--- 147,160 ----
+  	register struct schedproc *rmp;
+  	int rv, proc_nr_n, parent_nr_n;
+  
++ 	/*printf("sched run %d\n",__LINE__);*/
++ 
+  	/* Only accept start messages from PM */
+  	if (!is_from_pm(m_ptr))
+  		return EPERM;
+  
++ 	/*printf("sched run %d\n",__LINE__);*/
++ 
+  	/* Resolve endpoint to proc slot. */
+  	if ((rv = sched_isemtyendpt(m_ptr->SCHEDULING_ENDPOINT, &proc_nr_n))
+  			!= OK) {
+***************
+*** 92,97 ****
+--- 162,169 ----
+  	}
+  	rmp = &schedproc[proc_nr_n];
+  
++ 	/*printf("sched run %d\n",__LINE__);*/
++ 
+  	/* Populate process slot */
+  	rmp->endpoint     = m_ptr->SCHEDULING_ENDPOINT;
+  	rmp->parent       = m_ptr->SCHEDULING_PARENT;
+***************
+*** 102,107 ****
+--- 174,181 ----
+  	if (rv != OK)
+  		return rv;
+  
++ 	/*printf("sched run %d\n",__LINE__);*/
++ 
+  	/* Inherit current priority and time slice from parent. Since there
+  	 * is currently only one scheduler scheduling the whole system, this
+  	 * value is local and we assert that the parent endpoint is valid */
+***************
+*** 121,126 ****
+--- 195,202 ----
+  		rmp->time_slice = schedproc[parent_nr_n].time_slice;
+  	}
+  
++ 	/*printf("sched run %d\n",__LINE__);*/
++ 
+  	/* Take over scheduling the process. The kernel reply message populates
+  	 * the processes current priority and its time slice */
+  	if ((rv = sys_schedctl(rmp->endpoint)) != OK) {
+***************
+*** 130,135 ****
+--- 206,240 ----
+  	}
+  	rmp->flags = IN_USE;
+  
++ 	/*printf("sched run %d\n",__LINE__);*/
++ 
++ 
++ 	{/*LOTTERY*/
++ 		/*int process_number;
++ 		if(!isokendpt(m_ptr->SCHEDULING_ENDPOINT, &process_number)) {
++ 			return EINVAL;
++ 		}
++ 		if(!( priv(proc_addr(process_number))->s_flags & SYS_PROC )){*/
++ 		struct priv s;
++ 		if(OK!=(rv = sys_getpriv(&s, m_ptr->SCHEDULING_ENDPOINT))){
++ 			printf("sched can't get the priv of ep=%d\n",m_ptr->SCHEDULING_ENDPOINT);
++ 			return rv;
++ 		}
++ 		if(!( s.s_flags & SYS_PROC )){
++ 			rmp->flags |= LOTTERIED;
++ 			rmp->priority = 5;
++ 			rmp->max_priority = -1;
++ 			rmp->time_slice = DEFAULT_USER_TIME_SLICE/*30000*/;
++ 			rv = sys_schedule(rmp->endpoint, UNLUCKY_Q, rmp->time_slice);
++ 			m_ptr->SCHEDULING_SCHEDULER = SCHED_PROC_NR;
++ 			/*printf("+++++++++sched uses lottery scheduling on ep=%d\n",m_ptr->SCHEDULING_ENDPOINT);*/
++ 			return rv;
++ 		}/*else{
++ 			printf("-_-sched doesn't use lottery scheduling on ep=%d\n",m_ptr->SCHEDULING_ENDPOINT);
++ 		}*/
++ 	}
++ 
++ 
+  	/* Schedule the process, giving it some quantum */
+  	if ((rv = schedule_process(rmp)) != OK) {
+  		printf("Sched: Error while scheduling process, kernel replied %d\n",
+***************
+*** 174,179 ****
+--- 279,296 ----
+  	rmp = &schedproc[proc_nr_n];
+  	nice = m_ptr->SCHEDULING_NICE;
+  
++ 	if (rmp->flags & LOTTERIED){
++ 		int hi = 100;
++ 		int lo = 1;
++ 		int p = rmp->priority+nice;
++ 		if(p>hi){
++ 			p = hi;
++ 		}else if(p<lo){
++ 			p = lo;
++ 		}
++ 		rmp->priority = p;
++ 		return OK;
++ 	}
+  	if ((rv = nice_to_priority(nice, &new_q)) != OK)
+  		return rv;
+  
+***************
+*** 223,228 ****
+--- 340,346 ----
+  	balance_timeout = BALANCE_TIMEOUT * sys_hz();
+  	tmr_inittimer(&sched_timer);
+  	sched_set_timer(&sched_timer, balance_timeout, balance_queues, 0);
++ 	/*SET_LOT_TIMER;*/
+  }
+  
+  /*===========================================================================*
+***************
+*** 242,247 ****
+--- 360,366 ----
+  
+  	for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
+  		if (rmp->flags & IN_USE) {
++ 			if(rmp->flags & LOTTERIED) continue;
+  			if (rmp->priority > rmp->max_priority) {
+  				rmp->priority -= 1; /* increase priority */
+  				schedule_process(rmp);

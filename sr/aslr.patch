@@ -1,0 +1,28 @@
+diff -c -r src.clean/servers/pm/exec.c src/servers/pm/exec.c
+*** src.clean/servers/pm/exec.c	Mon Oct 31 03:13:17 2011
+--- src/servers/pm/exec.c	Mon Nov 28 15:40:29 2011
+***************
+*** 30,35 ****
+--- 30,36 ----
+  #include <sys/ptrace.h>
+  #include "mproc.h"
+  #include "param.h"
++ #include <stdlib.h>
+  
+  #define ESCRIPT	(-2000)	/* Returned by read_header for a #! script. */
+  #define PTRSIZE	sizeof(char *) /* Size of pointers in argv[] and envp[]. */
+***************
+*** 95,100 ****
+--- 96,107 ----
+  		/* System will save command line for debugging, ps(1) output, etc. */
+  		strncpy(rmp->mp_name, args.progname, PROC_NAME_LEN-1);
+  		rmp->mp_name[PROC_NAME_LEN-1] = '\0';
++ 
++ 		/* aslr */
++ 		{
++ 			unsigned s = rand();
++ 			stack_top -= (s*s)%179;
++ 		}
+  
+  		/* Save offset to initial argc (for ps) */
+  		rmp->mp_procargs = (vir_bytes) stack_top - args.args_bytes;

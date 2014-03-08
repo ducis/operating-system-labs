@@ -1,0 +1,16 @@
+The program t0 (t0.c) prints messages as required in Task 1 and Task 2.
+Usage:
+	./t0 path_to_file
+The program h0 (t0.c) opens a file twice and holds the 2 file descriptors 
+for one minuteto help testing Task 1
+Usage:
+	./h0 path_to_file
+To make both, just type
+	make all
+The script gen.sh generates files of exponentially increasing sizes("sample0" 
+to "sample9") from the file "seed"
+The script try.sh automatically runs one to three instances of h0 with "sample0"
+and runs t0 to verify Task 1. It also tests t0 over "sample1" to "sample9" to 
+verify Task 2.
+Finally, there is an all-in-one script called runtests.sh, which calls make,gen.sh
+and try.sh

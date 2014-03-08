@@ -1,0 +1,12 @@
+open 192.168.248.128
+ff
+ff
+send ../src/include/minix/com.h
+send ../src/include/minix/type.h
+send ../src/include/minix/syslib.h
+send ../src/servers/vm/alloc.c
+send ../src/servers/vm/main.c
+send ../src/servers/vm/proto.h
+send ../src/lib/libsys/sys_p2.c
+send ../src/lib/libsys/Makefile
+quit

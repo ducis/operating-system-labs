@@ -1,0 +1,28 @@
+Index: servers/vm/alloc.c
+===================================================================
+--- servers/vm/alloc.c	(revision 1)
++++ servers/vm/alloc.c	(working copy)
+@@ -181,6 +181,7 @@
+ 	clicks += align_clicks;
+   }
+ 
++  printf("alloc_mem\n");
+   if(vm_paged) {
+ 	mem = alloc_pages(clicks, memflags, NULL);
+ 	if(mem == NO_MEM) {
+@@ -188,6 +189,7 @@
+ 		mem = alloc_pages(clicks, memflags, NULL);
+ 	}
+   } else {
++	  printf("	alloc_nem\n");
+ CHECKHOLES;
+         prev_ptr = NULL;
+ 	hp = hole_head;
+@@ -219,6 +221,7 @@
+ 		hp = hp->h_next;
+ 	}
+   }
++  printf("		alloc_nem\n");
+ 
+   if(mem == NO_MEM)
+   	return mem;

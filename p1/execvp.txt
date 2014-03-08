@@ -1,0 +1,109 @@
+EXEC(3)                    Linux Programmer’s Manual                   EXEC(3)
+
+
+
+NNAAMMEE
+       execl, execlp, execle, execv, execvp - execute a file
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       eexxtteerrnn cchhaarr ****eennvviirroonn;;
+
+       iinntt eexxeeccll((ccoonnsstt cchhaarr **_p_a_t_h,, ccoonnsstt cchhaarr **_a_r_g,, ......));;
+       iinntt eexxeeccllpp((ccoonnsstt cchhaarr **_f_i_l_e,, ccoonnsstt cchhaarr **_a_r_g,, ......));;
+       iinntt eexxeeccllee((ccoonnsstt cchhaarr **_p_a_t_h,, ccoonnsstt cchhaarr **_a_r_g,,
+                  ......,, cchhaarr ** ccoonnsstt _e_n_v_p[[]]));;
+       iinntt eexxeeccvv((ccoonnsstt cchhaarr **_p_a_t_h,, cchhaarr **ccoonnsstt _a_r_g_v[[]]));;
+       iinntt eexxeeccvvpp((ccoonnsstt cchhaarr **_f_i_l_e,, cchhaarr **ccoonnsstt _a_r_g_v[[]]));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  eexxeecc() family of functions replaces the current process image with
+       a new process image.  The functions described in this manual  page  are
+       front-ends  for  the  function  eexxeeccvvee(2).   (See  the  manual page for
+       eexxeeccvvee() for detailed information about the replacement of the  current
+       process.)
+
+       The  initial  argument  for  these  functions is the pathname of a file
+       which is to be executed.
+
+       The _c_o_n_s_t _c_h_a_r _*_a_r_g and subsequent ellipses in the  eexxeeccll(),  eexxeeccllpp(),
+       and  eexxeeccllee()  functions  can  be  thought of as _a_r_g_0, _a_r_g_1, ..., _a_r_g_n.
+       Together they describe a list of one or more  pointers  to  null-termi-
+       nated  strings  that  represent the argument list available to the exe-
+       cuted program.  The first argument, by convention, should point to  the
+       filename  associated  with  the file being executed.  The list of argu-
+       ments _m_u_s_t be terminated by a NULL pointer, and, since these are  vari-
+       adic functions, this pointer must be cast ((cchhaarr **)) NNUULLLL.
+
+       The  eexxeeccvv()  and  eexxeeccvvpp()  functions  provide an array of pointers to
+       null-terminated strings that represent the argument list  available  to
+       the  new  program.   The first argument, by convention, should point to
+       the filename associated with the file being  executed.   The  array  of
+       pointers _m_u_s_t be terminated by a NULL pointer.
+
+       The  eexxeeccllee()  function  also specifies the environment of the executed
+       process by following the NULL pointer that terminates the list of argu-
+       ments  in  the  parameter list or the pointer to the argv array with an
+       additional parameter.  This additional parameter is an array of  point-
+       ers  to  null-terminated  strings  and  _m_u_s_t  be  terminated  by a NULL
+       pointer.  The other functions take the environment for the new  process
+       image from the external variable _e_n_v_i_r_o_n in the current process.
+
+       Some of these functions have special semantics.
+
+       The  functions  eexxeeccllpp() and eexxeeccvvpp() will duplicate the actions of the
+       shell in searching for an executable file  if  the  specified  filename
+       does  not  contain  a slash (/) character.  The search path is the path
+       specified in the environment by the PPAATTHH variable.   If  this  variable
+       isn’t specified, the default path ‘‘:/bin:/usr/bin’’ is used.  In addi-
+       tion, certain errors are treated specially.
+
+       If permission is denied for a file  (the  attempted  eexxeeccvvee()  returned
+       EEAACCCCEESS), these functions will continue searching the rest of the search
+       path.  If no other file is found, however, they will  return  with  the
+       global variable _e_r_r_n_o set to EEAACCCCEESS.
+
+       If  the  header  of  a  file  isn’t  recognized (the attempted eexxeeccvvee()
+       returned EENNOOEEXXEECC), these functions will execute the shell with the path
+       of  the file as its first argument.  (If this attempt fails, no further
+       searching is done.)
+
+RREETTUURRNN VVAALLUUEE
+       If any of the eexxeecc() functions returns, an error  will  have  occurred.
+       The  return  value  is -1, and the global variable _e_r_r_n_o will be set to
+       indicate the error.
+
+FFIILLEESS
+       _/_b_i_n_/_s_h
+
+EERRRROORRSS
+       All of these functions may fail and set _e_r_r_n_o for  any  of  the  errors
+       specified for the library function eexxeeccvvee(2).
+
+SSEEEE AALLSSOO
+       sshh(1), eexxeeccvvee(2), ffoorrkk(2), ppttrraaccee(2), ffeexxeeccvvee(3), eennvviirroonn(7)
+
+CCOOMMPPAATTIIBBIILLIITTYY
+       On  some other systems the default path (used when the environment does
+       not contain the variable PPAATTHH) has the current working directory listed
+       after  _/_b_i_n  and  _/_u_s_r_/_b_i_n, as an anti-Trojan-horse measure. Linux uses
+       here the traditional "current directory first" default path.
+
+       The behavior of eexxeeccllpp() and eexxeeccvvpp() when errors occur while  attempt-
+       ing to execute the file is historic practice, but has not traditionally
+       been documented and is not specified by the POSIX  standard.  BSD  (and
+       possibly  other  systems) do an automatic sleep and retry if ETXTBSY is
+       encountered. Linux treats it as a hard error and returns immediately.
+
+       Traditionally, the functions eexxeeccllpp() and eexxeeccvvpp() ignored  all  errors
+       except  for  the  ones described above and EENNOOMMEEMM and EE22BBIIGG, upon which
+       they returned.  They now return  if  any  error  other  than  the  ones
+       described above occurs.
+
+CCOONNFFOORRMMIINNGG TTOO
+       POSIX.1-2001.
+
+
+
+BSD MANPAGE                       1993-11-29                           EXEC(3)

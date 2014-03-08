@@ -1,0 +1,9 @@
+The server mfs actually holds the inodes, so the first step is 
+to delegate the system call originally to vfs to mfs. Inside mfs, 
+there is a routine read_map that maps a position in a file to its 
+disk block number. The implementation of Task 2 simply repeatedly 
+calls read_map with positions with a stride of block size and prints
+the result. The "SZ: A VS B*C" after the printed disk block list
+shows the file size A, the number of blocks printed B, and the block
+sie C to verify that all blocks are printed ( A<=B*C and A>(B-1)*C ).
+

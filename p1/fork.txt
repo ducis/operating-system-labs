@@ -1,0 +1,54 @@
+FORK(2)                    Linux Programmer’s Manual                   FORK(2)
+
+
+
+NNAAMMEE
+       fork - create a child process
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       ppiidd__tt ffoorrkk((vvooiidd));;
+
+DDEESSCCRRIIPPTTIIOONN
+       ffoorrkk()  creates  a  child  process that differs from the parent process
+       only in its PID and PPID, and in the fact  that  resource  utilizations
+       are set to 0.  File locks and pending signals are not inherited.
+
+       Under  Linux,  ffoorrkk()  is implemented using copy-on-write pages, so the
+       only penalty that it incurs is the time and memory required  to  dupli-
+       cate  the  parent’s  page tables, and to create a unique task structure
+       for the child.
+
+RREETTUURRNN VVAALLUUEE
+       On success, the PID of the child process is returned  in  the  parent’s
+       thread  of execution, and a 0 is returned in the child’s thread of exe-
+       cution.  On failure, a -1 will be returned in the parent’s context,  no
+       child process will be created, and _e_r_r_n_o will be set appropriately.
+
+EERRRROORRSS
+       EEAAGGAAIINN ffoorrkk()  cannot  allocate  sufficient memory to copy the parent’s
+              page tables and allocate a task structure for the child.
+
+       EEAAGGAAIINN It was not possible to create a new process because the caller’s
+              RRLLIIMMIITT__NNPPRROOCC  resource  limit  was  encountered.  To exceed this
+              limit, the process must have either  the  CCAAPP__SSYYSS__AADDMMIINN  or  the
+              CCAAPP__SSYYSS__RREESSOOUURRCCEE capability.
+
+       EENNOOMMEEMM ffoorrkk()  failed  to  allocate  the  necessary  kernel  structures
+              because memory is tight.
+
+CCOONNFFOORRMMIINNGG TTOO
+       SVr4, 4.3BSD, POSIX.1-2001.
+
+EEXXAAMMPPLLEE
+       See ppiippee(2) and wwaaiitt(2).
+
+SSEEEE AALLSSOO
+       cclloonnee(2), eexxeeccvvee(2), sseettrrlliimmiitt(2), uunnsshhaarree(2), vvffoorrkk(2), wwaaiitt(2), ccaappaa--
+       bbiilliittiieess(7)
+
+
+
+Linux 2.6.6                       2004-05-27                           FORK(2)

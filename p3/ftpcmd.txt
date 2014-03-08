@@ -1,0 +1,26 @@
+open 192.168.248.128
+ff
+ff
+send ../lsri/include/minix/callnr.h
+send ../lsri/include/fcntl.h
+send ../lsri/lib/libc/posix/_open.c
+send ../lsri/servers/vfs/open.c
+send ../lsri/servers/vfs/proto.h
+send ../lsri/servers/vfs/table.c
+send ../lsri/servers/vfs/request.c
+send ../lsri/include/minix/vfsif.h
+mkdir m
+mkdir h
+mkdir i
+mkdir p
+cd m
+send ../lsri/servers/mfs/proto.h
+send ../lsri/servers/mfs/read.c
+send ../lsri/servers/mfs/table.c
+cd ../h
+send ../lsri/servers/hgfs/table.c
+cd ../i
+send ../lsri/servers/iso9660fs/table.c
+cd ../p
+send ../lsri/servers/pfs/table.c
+quit

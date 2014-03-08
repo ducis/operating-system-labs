@@ -1,0 +1,5 @@
+要求中有"The feedback scheduler does a similar thing using multiple queues...you'll need to add 3 more process queues to the MINIX operating system...", 但根据我的理解这一部分和lottery scheduling应该是没有关系的,lottery scheduling本来只要加1个队列就可以了，是只要加一个队列吗？
+
+另外后面的描述又变成了"System processes (queues 0–14) are run using their original algorithm, and queue 15 still contains the idle process. However, queue 16 contains all of the runnable user processes...",也就是说总共17个队列。
+
+请问能否将需要做lottery scheduling 的 user processes 作为queue 15, 将 idle process 放在 queue 16?

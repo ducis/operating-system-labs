@@ -1,0 +1,448 @@
+diff -c -Nr src.clean/include/minix/com.h src/include/minix/com.h
+*** src.clean/include/minix/com.h	Mon Oct 31 02:24:08 2011
+--- src/include/minix/com.h	Sat Nov 26 21:16:53 2011
+***************
+*** 1020,1027 ****
+  #	define VM_RS_SRC_ENDPT		m1_i1
+  #	define VM_RS_DST_ENDPT		m1_i2
+  
+  /* Total. */
+! #define NR_VM_CALLS				42
+  #define VM_CALL_MASK_SIZE			BITMAP_CHUNKS(NR_VM_CALLS)
+  
+  /* not handled as a normal VM call, thus at the end of the reserved rage */
+--- 1020,1045 ----
+  #	define VM_RS_SRC_ENDPT		m1_i1
+  #	define VM_RS_DST_ENDPT		m1_i2
+  
++ #define VM_P2		(VM_RQ_BASE+42)
++ #define VM_P2_OP	m7_i3
++ #	define VM_P2_ECHO 0
++ #	define VM_P2_SAVE_BITMAP 1
++ #	define VM_P2_GET_STAT 2
++ #	define VM_P2_SET_POLICY 3
++ #define VM_P2_POLICY m7_i4
++ #	define VM_P2_FRST_FIT 0
++ #	define VM_P2_NEXT_FIT 1
++ #		define VM_P2_NEXT_FIT_STEADY_STATE -1 /* should not be used by applications */
++ #	define VM_P2_BEST_FIT 2
++ #	define VM_P2_RAND_FIT 3
++ #	define VM_P2_WRST_FIT 4
++ #define VM_P2_BUF	m7_p1
++ #define VM_P2_BUFLEN m7_i1
++ #define VM_P2_ENDPT	m7_i2
++ 
++ 
+  /* Total. */
+! #define NR_VM_CALLS				43
+  #define VM_CALL_MASK_SIZE			BITMAP_CHUNKS(NR_VM_CALLS)
+  
+  /* not handled as a normal VM call, thus at the end of the reserved rage */
+diff -c -Nr src.clean/include/minix/syslib.h src/include/minix/syslib.h
+*** src.clean/include/minix/syslib.h	Mon Oct 31 02:25:01 2011
+--- src/include/minix/syslib.h	Tue Nov 22 20:52:11 2011
+***************
+*** 229,234 ****
+--- 229,241 ----
+  #define sys_inl(p,v)	sys_in((p), (v), _DIO_LONG)
+  _PROTOTYPE(int sys_in, (int port, unsigned long *value, int type)	);
+  
++ 
++ _PROTOTYPE(int sys_p2_set_policy, (int policy)		);
++ _PROTOTYPE(int sys_p2_get_stat, (vm_p2_stats *out)		);
++ _PROTOTYPE(int sys_p2_echo, (void)		);
++ _PROTOTYPE(int sys_p2_save_bitmap, (char *buf, int buflen)		);
++ 
++ 
+  /* pci.c */
+  _PROTOTYPE( void pci_init, (void)					);
+  _PROTOTYPE( void pci_init1, (char *name)				);
+diff -c -Nr src.clean/include/minix/type.h src/include/minix/type.h
+*** src.clean/include/minix/type.h	Mon Oct 31 02:25:06 2011
+--- src/include/minix/type.h	Sat Nov 26 03:38:19 2011
+***************
+*** 211,215 ****
+--- 211,220 ----
+  	struct pciinfo_entry pi_entries[NR_PCIDEV];
+  };
+  
++ typedef struct{
++ 	int nodes,pages,largest;
++ 	float avg_pages, var_pages;
++ }vm_p2_stats;
++ 
+  #endif /* _TYPE_H */
+  
+diff -c -Nr src.clean/lib/libsys/Makefile src/lib/libsys/Makefile
+*** src.clean/lib/libsys/Makefile	Mon Oct 31 02:54:40 2011
+--- src/lib/libsys/Makefile	Sun Nov 20 21:28:57 2011
+***************
+*** 119,124 ****
+  	timing.c \
+  	profile_extern.c \
+  	profile.c \
+! 	vprintf.c
+  
+  .include <minix.lib.mk>
+--- 119,125 ----
+  	timing.c \
+  	profile_extern.c \
+  	profile.c \
+! 	vprintf.c \
+! 	sys_p2.c
+  
+  .include <minix.lib.mk>
+diff -c -Nr src.clean/lib/libsys/sys_p2.c src/lib/libsys/sys_p2.c
+*** src.clean/lib/libsys/sys_p2.c	Thu Jan  1 08:00:00 1970
+--- src/lib/libsys/sys_p2.c	Sat Nov 26 00:07:56 2011
+***************
+*** 0 ****
+--- 1,40 ----
++ #include <stdio.h>
++ 
++ #include "syslib.h"
++ 
++ #define CHECKEUID if(geteuid()){ return EPERM; }
++ 
++ PUBLIC int sys_p2_set_policy(int policy){
++ 	message m;
++ 	CHECKEUID;
++ 	m.VM_P2_OP = VM_P2_SET_POLICY;
++ 	m.VM_P2_POLICY = policy;
++ 	return(_syscall(VM_PROC_NR, VM_P2, &m));
++ }
++ 
++ PUBLIC int sys_p2_get_stat(vm_p2_stats *out){
++ 	message m;
++ 	CHECKEUID;
++ 	m.VM_P2_ENDPT = getprocnr();
++ 	m.VM_P2_OP = VM_P2_GET_STAT;
++ 	m.VM_P2_BUF = (char*)out;
++ 	/*fprintf(stdout,"sys_p2_get_stat() %d\n",m.VM_P2_ENDPT);*/
++ 	return(_syscall(VM_PROC_NR, VM_P2, &m));
++ }
++ 
++ PUBLIC int sys_p2_echo(void){
++ 	message m;
++ 	CHECKEUID;
++ 	m.VM_P2_OP = VM_P2_ECHO;
++ 	return(_syscall(VM_PROC_NR, VM_P2, &m));
++ }
++ 
++ PUBLIC int sys_p2_save_bitmap(char *buf, int buflen){
++ 	message m;
++ 	CHECKEUID;
++ 	m.VM_P2_ENDPT = SELF;
++ 	m.VM_P2_OP = VM_P2_SAVE_BITMAP;
++ 	m.VM_P2_BUF = buf;
++ 	m.VM_P2_BUFLEN = buflen;
++ 	return(_syscall(VM_PROC_NR, VM_P2, &m));
++ }
+diff -c -Nr src.clean/servers/vm/alloc.c src/servers/vm/alloc.c
+*** src.clean/servers/vm/alloc.c	Mon Oct 31 03:15:39 2011
+--- src/servers/vm/alloc.c	Mon Nov 28 02:03:45 2011
+***************
+*** 63,68 ****
+--- 63,71 ----
+  static int startpages;
+  
+  
++ static int g_alloc_policy = INT_MAX;
++ 
++ 
+  #define _NR_HOLES (_NR_PROCS*2)  /* No. of memory holes maintained by VM */
+  
+  PRIVATE struct hole hole[_NR_HOLES];
+***************
+*** 161,166 ****
+--- 164,215 ----
+  }
+  #endif
+  
++ 
++ PUBLIC int do_vm_p2(message *msg){
++ 	/*printf("\n<<<<<<<<<<<<<<<do_vm_p2()\n");*/
++ 	switch(msg->VM_P2_OP){
++ 		case VM_P2_ECHO:
++ 			printf("\ndo_vm_p2() VM_P2_ECHO built at %s %s\n",__DATE__,__TIME__);
++ 			printmemstats();
++ 			break;
++ 		case VM_P2_SAVE_BITMAP:
++ 			break;
++ 		case VM_P2_GET_STAT:
++ 			{
++ 				vm_p2_stats s;
++ 				memstats(&s.nodes, &s.pages, &s.largest);
++ 				/*printf("do_vm_p2() %d %d %d\n",s.nodes,s.pages,s.largest);*/
++ 				if(s.nodes<=0){
++ 					s.avg_pages = s.var_pages = 0;
++ 				}else if(s.nodes == 1){
++ 					s.avg_pages = s.pages;
++ 					s.var_pages = 0;
++ 				}else{
++ 					pagerange_t *cur;
++ 					addr_iter iter;
++ 					double sum_diff_sq = 0.0f;
++ 					double m = (double)s.pages/(double)s.nodes;
++ 					for(addr_start_iter_least(&addravl, &iter); cur=addr_get_iter(&iter); addr_incr_iter(&iter)){
++ 						double d = (double)cur->size - m;
++ 						sum_diff_sq += d*d;
++ 					}
++ 					s.var_pages = sum_diff_sq/(double)s.nodes;
++ 					s.avg_pages = m;
++ 				}
++ 				/*printf("do_vm_p2()sys_stackcopy %d %d\n",getprocnr(),msg->VM_P2_ENDPT);*/
++ 				return sys_stackcopy(getprocnr(), (vir_bytes)&s, msg->VM_P2_ENDPT, (vir_bytes)msg->VM_P2_BUF, sizeof(s));
++ 			}
++ 			break;
++ 		case VM_P2_SET_POLICY:
++ 			g_alloc_policy = msg->VM_P2_POLICY;
++ 			break;
++ 		default:
++ 			printf("\ndo_vm_p2() has received an undefined OP code %d\n",msg->VM_P2_OP);
++ 	}
++ 	return OK;
++ }
++ 
++ 
+  /*===========================================================================*
+   *				alloc_mem				     *
+   *===========================================================================*/
+***************
+*** 181,186 ****
+--- 230,240 ----
+  	clicks += align_clicks;
+    }
+  
++   /*printf("\n++++++alloc_mem %s %d\n",__TIME__,__LINE__);*/
++   if(g_alloc_policy!=INT_MAX){
++ 	  memflags |= PAF_CONTIG;
++ 	  /*printf("alloc_mem()  memflags & PAF_CONTIG == %d\n",memflags & PAF_CONTIG);*/
++   }
+    if(vm_paged) {
+  	mem = alloc_pages(clicks, memflags, NULL);
+  	if(mem == NO_MEM) {
+***************
+*** 188,193 ****
+--- 242,248 ----
+  		mem = alloc_pages(clicks, memflags, NULL);
+  	}
+    } else {
++ 	  printf("***********************unexpected alloc_nem branch\n");
+  CHECKHOLES;
+          prev_ptr = NULL;
+  	hp = hole_head;
+***************
+*** 445,456 ****
+   *===========================================================================*/
+  PRIVATE PUBLIC phys_bytes alloc_pages(int pages, int memflags, phys_bytes *len)
+  {
+! 	addr_iter iter;
+  	pagerange_t *pr;
+  	int incr;
+  	phys_bytes boundary16 = 16 * 1024 * 1024 / VM_PAGE_SIZE;
+  	phys_bytes boundary1  =  1 * 1024 * 1024 / VM_PAGE_SIZE;
+  	phys_bytes mem;
+  #if SANITYCHECKS
+  	int firstnodes, firstpages, wantnodes, wantpages;
+  	int finalnodes, finalpages;
+--- 500,516 ----
+   *===========================================================================*/
+  PRIVATE PUBLIC phys_bytes alloc_pages(int pages, int memflags, phys_bytes *len)
+  {
+! 	static addr_iter iter;
+  	pagerange_t *pr;
+  	int incr;
+  	phys_bytes boundary16 = 16 * 1024 * 1024 / VM_PAGE_SIZE;
+  	phys_bytes boundary1  =  1 * 1024 * 1024 / VM_PAGE_SIZE;
+  	phys_bytes mem;
++ 	int num_good = 0;
++ 	pagerange_t *chosen = 0;
++ 	int quality_of_choice = INT_MIN;
++ 	int optimizing = (VM_P2_BEST_FIT == g_alloc_policy) || (VM_P2_WRST_FIT == g_alloc_policy);
++ 	
+  #if SANITYCHECKS
+  	int firstnodes, firstpages, wantnodes, wantpages;
+  	int finalnodes, finalpages;
+***************
+*** 462,480 ****
+  	wantpages = firstpages - pages;
+  #endif
+  
+! 	if(memflags & (PAF_LOWER16MB|PAF_LOWER1MB)) {
+  		addr_start_iter_least(&addravl, &iter);
+  		incr = 1;
+! 	} else {
+! 		addr_start_iter_greatest(&addravl, &iter);
+! 		incr = 0;
+  	}
+  
+  	while((pr = addr_get_iter(&iter))) {
+  		SLABSANE(pr);
+  		assert(pr->size > 0);
+  		if(pr->size >= pages || (memflags & PAF_FIRSTBLOCK)) {
+! 			if(memflags & PAF_LOWER16MB) {
+  				if(pr->addr + pages > boundary16)
+  					return NO_MEM;
+  			}
+--- 522,558 ----
+  	wantpages = firstpages - pages;
+  #endif
+  
+! 	switch(g_alloc_policy){
+! 	case VM_P2_NEXT_FIT:
+! 		g_alloc_policy = VM_P2_NEXT_FIT_STEADY_STATE;
+! 	case VM_P2_FRST_FIT:
+! 	case VM_P2_RAND_FIT:
+! 	case VM_P2_BEST_FIT:
+! 	case VM_P2_WRST_FIT:
+  		addr_start_iter_least(&addravl, &iter);
++ 	case VM_P2_NEXT_FIT_STEADY_STATE:
+  		incr = 1;
+! 		memflags &= ~PAF_FIRSTBLOCK;
+! 		/*printf("alloc_pages special %d\n",g_alloc_policy);*/
+! 		break;
+! 	default:
+! 		if(memflags & (PAF_LOWER16MB|PAF_LOWER1MB)) {
+! 			addr_start_iter_least(&addravl, &iter);
+! 			incr = 1;
+! 			printf("alloc_pages 11111111111\n");
+! 		} else {
+! 			addr_start_iter_greatest(&addravl, &iter);
+! 			incr = 0;
+! 			/*printf("alloc_pages 00000000000\n");*/
+! 		}
+! 		break;
+  	}
+  
+  	while((pr = addr_get_iter(&iter))) {
+  		SLABSANE(pr);
+  		assert(pr->size > 0);
+  		if(pr->size >= pages || (memflags & PAF_FIRSTBLOCK)) {
+! 			if(memflags & PAF_LOWER16MB) {	
+  				if(pr->addr + pages > boundary16)
+  					return NO_MEM;
+  			}
+***************
+*** 485,496 ****
+  			}
+  
+  			/* good block found! */
+! 			break;
+  		}
+! 		if(incr)
+  			addr_incr_iter(&iter);
+! 		else
+  			addr_decr_iter(&iter);
+  	}
+  
+  	if(!pr) {
+--- 563,601 ----
+  			}
+  
+  			/* good block found! */
+! 			if(VM_P2_RAND_FIT==g_alloc_policy){
+! 				++num_good;
+! 				if(!num_good) break;
+! 			}else if(optimizing){
+! 				int q = abs(pr->size - pages);
+! 				/*printf("%d\n",pages);*/
+! 				assert(q>=0);
+! 				if(VM_P2_BEST_FIT==g_alloc_policy) q = -q;
+! 				if(q>quality_of_choice){
+! 					chosen = pr;
+! 					quality_of_choice = q;
+! 				}
+! 				/*printf("optimizing %d\n",quality_of_choice);*/
+! 			}else{
+! 				break;
+! 			}
+  		}
+! 		if(incr){
+  			addr_incr_iter(&iter);
+! 			if(VM_P2_RAND_FIT==g_alloc_policy && !addr_get_iter(&iter)){
+! 				num_good = -num_good;/*(rand()%num_good)-1;*/
+! 				addr_start_iter_least(&addravl, &iter);
+! 			}
+! 		}else{
+  			addr_decr_iter(&iter);
++ 		}
++ 	}
++ 	/*if(VM_P2_RAND_FIT==g_alloc_policy){
++ 		printf("checkpoint %d\n",__LINE__);
++ 	}*/
++ 	if(optimizing){
++ 		/*printf("optimizing %d\n",__LINE__);*/
++ 		pr = chosen;
+  	}
+  
+  	if(!pr) {
+***************
+*** 526,531 ****
+--- 631,637 ----
+  	assert(pr->size >= pages);
+  	if(pr->size == pages) {
+  		pagerange_t *prr;
++ 		addr_incr_iter(&iter);
+  		prr = addr_remove(&addravl, pr->addr);
+  		assert(prr);
+  		assert(prr == pr);
+***************
+*** 902,907 ****
+--- 1008,1017 ----
+  	 * contiguously, tell alloc function to grab whatever
+  	 * block it can find.
+  	 */
++ 	/*if(g_alloc_policy!=INT_MAX){
++ 		flags |= PAF_CONTIG;
++ 	}*/
++ 
+  	if(!(flags & PAF_CONTIG))
+  		flags |= PAF_FIRSTBLOCK;
+  
+diff -c -Nr src.clean/servers/vm/main.c src/servers/vm/main.c
+*** src.clean/servers/vm/main.c	Mon Oct 31 03:15:50 2011
+--- src/servers/vm/main.c	Mon Nov 21 23:40:50 2011
+***************
+*** 122,129 ****
+  	} else if(c < 0 || !vm_calls[c].vmc_func) {
+  		/* out of range or missing callnr */
+  	} else {
+! 		if (vm_acl_ok(who_e, c) != OK) {
+! 			printf("VM: unauthorized %s by %d\n",
+  					vm_calls[c].vmc_name, who_e);
+  		} else {
+  			SANITYCHECK(SCL_FUNCTIONS);
+--- 122,129 ----
+  	} else if(c < 0 || !vm_calls[c].vmc_func) {
+  		/* out of range or missing callnr */
+  	} else {
+! 		if (VM_P2-VM_RQ_BASE!=c && vm_acl_ok(who_e, c) != OK) {
+! 			printf("VM: unauthorized %d %s by %d\n",c,
+  					vm_calls[c].vmc_name, who_e);
+  		} else {
+  			SANITYCHECK(SCL_FUNCTIONS);
+***************
+*** 357,362 ****
+--- 357,364 ----
+  	CALLMAP(VM_FORGETBLOCKS, do_forgetblocks);
+  	CALLMAP(VM_FORGETBLOCK, do_forgetblock);
+  	CALLMAP(VM_YIELDBLOCKGETBLOCK, do_yieldblockgetblock);
++ 	
++ 	CALLMAP(VM_P2,do_vm_p2);
+  
+  	/* Sanity checks */
+  	if(find_kernel_top() >= VM_PROCSTART)
+diff -c -Nr src.clean/servers/vm/proto.h src/servers/vm/proto.h
+*** src.clean/servers/vm/proto.h	Mon Oct 31 03:16:04 2011
+--- src/servers/vm/proto.h	Sat Nov 19 13:28:47 2011
+***************
+*** 35,40 ****
+--- 35,41 ----
+  #define usedpages_add(a, l) usedpages_add_f(a, l, __FILE__, __LINE__)
+  
+  _PROTOTYPE( void mem_init, (struct memory *chunks)			);
++ _PROTOTYPE( int do_vm_p2, (message *msg) );
+  
+  /* utility.c */
+  _PROTOTYPE( int get_mem_map, (int proc_nr, struct mem_map *mem_map)     );

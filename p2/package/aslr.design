@@ -1,0 +1,8 @@
+I simply added a small random (different on each run) offset (0 to -178) 
+to the starting address of the stack top when starting a process. 
+Because calling timing services on the startup of the first or every 
+processes causes problems (even clock()), srand() is not called on pm 
+startup, neither is the offset computed from some time. The starting 
+address of the stack when running the test program as specified in the 
+pdf does pseudo-randomly change.
+

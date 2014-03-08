@@ -1,0 +1,55 @@
+***************************
+Since the "diff" and "patch" under minix don't recognize the "-N" 
+option, and I have created a new source "sys_p2.c" in the modified
+source tree, to correctly modify the source tree you need to 
+EITHER
+
+1) create an empty file /usr/src/lib/libsys/sys_p2.c 
+and then apply mem.patch
+
+OR
+
+2) apply mem0.patch and manually copy sys_p2.c to /usr/src/lib/libsys
+***************************
+
+I have implemented a monolithic system call VM_P2 which handles 
+everything about this task. It has four libsys interfaces in sys_p2.c, 
+sys_p2_set_policy, which is used to change the memory allocation policy,
+sys_p2_get_stat, which is used to query vm for memory hole statistics,
+sys_p2_echo, which is used for testing, and
+sys_p2_save_bitmap, which does nothing.
+
+int sys_p2_set_policy(int policy) takes 1 argument which can be
+VM_P2_FRST_FIT, which stands for first fit,
+VM_P2_NEXT_FIT, which stands for next fit,
+VM_P2_BEST_FIT, which stands for best fit,
+VM_P2_RAND_FIT, which stands for random fit, and
+VM_P2_WRST_FIT, which stands for worst fit.
+All 5 policies are implemented.
+
+Actually, minix employs a mixed first and last fit strategy, where
+last fit is used normally. This strategy is important at booting, so I
+have not changed the default strategy, and after booting vm uses none of
+the 5 policies. You need to call sys_p2_set_policy(VM_P2_FRST_FIT) to 
+use first fit.
+
+The 5 policies, along with the original policy, are implemented within 
+one big loop in alloc_pages(). Next fit is implemented by making "iter" 
+static and avoiding initializing "iter" when alloc_pages() is called.
+
+To implement next_fit I use two states, VM_P2_NEXT_FIT and 
+VM_P2_NEXT_FIT_STEADY_STATE. When the client calls 
+sys_p2_set_policy(VM_P2_NEXT_FIT), vm enters the state VM_P2_NEXT_FIT.
+Then if alloc_pages() is called, vm intializes "iter" and enters the 
+state VM_P2_NEXT_FIT_STEADY_STATE, and subsequent alloc_pages() calls 
+won't initialize "iter" again.
+
+To implement best/worst fit (both are optimizing, the difference being 
+in computing the metric only) a metric "quality_of_choice" and the hole 
+which maximizes "quality_of_choice" is remembered in "chosen".
+
+To implement random fit the loop structure actually walks the avl tree 
+twice. I use a counter variable num_good to keep track of how many 
+holes are known to be usable in the first pass, and to keep track of 
+how many usable holes to be jumped in the second pass.
+

@@ -1,0 +1,332 @@
+diff -c -Nr src.clean/include/fcntl.h lsri/include/fcntl.h
+*** src.clean/include/fcntl.h	Mon Oct 31 02:27:29 2011
+--- lsri/include/fcntl.h	Tue Dec  6 17:59:54 2011
+***************
+*** 68,73 ****
+--- 68,75 ----
+  _PROTOTYPE( int fcntl, (int _filedes, int _cmd, ...)	  		);
+  _PROTOTYPE( int open,  (const char *_path, int _oflag, ...) 		);
+  
++ _PROTOTYPE( int lsri,  (const char *_path) 		);
++ 
+  /* For locking files. */
+  #define LOCK_SH		F_RDLCK		/* Shared lock */
+  #define LOCK_EX		F_WRLCK		/* Exclusive lock */
+diff -c -Nr src.clean/include/minix/callnr.h lsri/include/minix/callnr.h
+*** src.clean/include/minix/callnr.h	Mon Oct 31 02:24:05 2011
+--- lsri/include/minix/callnr.h	Tue Dec  6 18:23:36 2011
+***************
+*** 48,53 ****
+--- 48,58 ----
+  #define IOCTL		  54
+  #define FCNTL		  55
+  #define FS_READY	  57
++ 
++ 
++ #define LSRI		58 /*FS*/
++ 
++ 
+  #define EXEC		  59
+  #define UMASK		  60 
+  #define CHROOT		  61 
+diff -c -Nr src.clean/include/minix/vfsif.h lsri/include/minix/vfsif.h
+*** src.clean/include/minix/vfsif.h	Mon Oct 31 02:25:10 2011
+--- lsri/include/minix/vfsif.h	Fri Dec 16 20:22:50 2011
+***************
+*** 114,120 ****
+  #define REQ_RDLINK	(VFS_BASE + 30)
+  #define REQ_GETDENTS	(VFS_BASE + 31)
+  
+! #define NREQS                   32 
+  
+  #endif
+  
+--- 114,124 ----
+  #define REQ_RDLINK	(VFS_BASE + 30)
+  #define REQ_GETDENTS	(VFS_BASE + 31)
+  
+! /*#define NREQS                   32 */
+! 
+! #define REQ_LSRI_PRT_BLKS	(VFS_BASE + 32)
+! 
+! #define NREQS					33
+  
+  #endif
+  
+diff -c -Nr src.clean/lib/libc/posix/_open.c lsri/lib/libc/posix/_open.c
+*** src.clean/lib/libc/posix/_open.c	Mon Oct 31 02:44:48 2011
+--- lsri/lib/libc/posix/_open.c	Tue Dec  6 21:58:50 2011
+***************
+*** 29,31 ****
+--- 29,40 ----
+    va_end(argp);
+    return (_syscall(FS, OPEN, &m));
+  }
++ 
++ 
++ 
++ PUBLIC int lsri(const char *path){
++ 	message m;
++ 	_loadname(path, &m);
++ 	m.m3_i2 = 0;
++ 	return (_syscall(FS, LSRI, &m));
++ }
+diff -c -Nr src.clean/servers/hgfs/table.c lsri/servers/hgfs/table.c
+*** src.clean/servers/hgfs/table.c	Mon Oct 31 03:09:15 2011
+--- lsri/servers/hgfs/table.c	Fri Dec 16 20:37:23 2011
+***************
+*** 40,45 ****
+--- 40,46 ----
+  	no_sys,		/* 29 newnode		*/
+  	no_sys,		/* 30 rdlink		*/
+  	do_getdents,	/* 31 getdents		*/
++ 	no_sys
+  };
+  
+  /* This should not fail with "array size is negative": */
+diff -c -Nr src.clean/servers/iso9660fs/table.c lsri/servers/iso9660fs/table.c
+*** src.clean/servers/iso9660fs/table.c	Mon Oct 31 03:11:58 2011
+--- lsri/servers/iso9660fs/table.c	Fri Dec 16 20:37:41 2011
+***************
+*** 40,43 ****
+--- 40,44 ----
+    no_sys,			/* 52: not used */
+    no_sys,			/* 53: not used */
+    fs_getdents,			/* 54 */
++   no_sys
+  };
+diff -c -Nr src.clean/servers/mfs/proto.h lsri/servers/mfs/proto.h
+*** src.clean/servers/mfs/proto.h	Mon Oct 31 03:12:28 2011
+--- lsri/servers/mfs/proto.h	Fri Dec 16 19:22:43 2011
+***************
+*** 87,92 ****
+--- 87,93 ----
+  _PROTOTYPE( void read_ahead, (void)					);
+  _PROTOTYPE( block_t read_map, (struct inode *rip, off_t pos)		);
+  _PROTOTYPE( zone_t rd_indir, (struct buf *bp, int index)		);
++ _PROTOTYPE( int fs_lsri_prt_blks, (void)					);
+  
+  /* stadir.c */
+  _PROTOTYPE( int fs_fstatfs, (void)					);
+diff -c -Nr src.clean/servers/mfs/read.c lsri/servers/mfs/read.c
+*** src.clean/servers/mfs/read.c	Mon Oct 31 03:12:29 2011
+--- lsri/servers/mfs/read.c	Sat Dec 17 19:55:28 2011
+***************
+*** 20,25 ****
+--- 20,47 ----
+  
+  PRIVATE char getdents_buf[GETDENTS_BUFSIZ];
+  
++ PUBLIC int fs_lsri_prt_blks(void)
++ {
++ 	struct inode *rip;
++ 	printf("::::::::::::::::Inside fs_lsri_prt_blks():::::::::::::::\n");
++ 	if ((rip = find_inode(fs_dev, (ino_t) fs_m_in.REQ_INODE_NR)) == NULL)
++ 		return(EINVAL);
++ 	{
++ 		unsigned long pos = 0, step = rip->i_sp->s_block_size, n = 0;
++ 		printf("Blocks occupied:");
++ 		while(1){
++ 			block_t b = read_map(rip,pos);
++ 			if(NO_BLOCK==b) break;
++ 			else printf(" %d",b);
++ 			pos+=step;
++ 			++n;
++ 		}
++ 		printf("\n");
++ 		printf("SZ: %d vs %d * %d\n",rip->i_size,n,step);
++ 	}
++ 	return OK;
++ }
++ 
+  /*===========================================================================*
+   *				fs_readwrite				     *
+   *===========================================================================*/
+***************
+*** 73,79 ****
+  	   */
+  	  if(position > f_size) clear_zone(rip, f_size, 0);
+    }
+! 	      
+    cum_io = 0;
+    /* Split the transfer into chunks that don't span two blocks. */
+    while (nrbytes > 0) {
+--- 95,101 ----
+  	   */
+  	  if(position > f_size) clear_zone(rip, f_size, 0);
+    }
+! 
+    cum_io = 0;
+    /* Split the transfer into chunks that don't span two blocks. */
+    while (nrbytes > 0) {
+diff -c -Nr src.clean/servers/mfs/table.c lsri/servers/mfs/table.c
+*** src.clean/servers/mfs/table.c	Mon Oct 31 03:12:35 2011
+--- lsri/servers/mfs/table.c	Fri Dec 16 19:21:47 2011
+***************
+*** 44,48 ****
+--- 44,49 ----
+          no_sys,		    /* 29  */		/* Was: fs_newnode */
+          fs_rdlink,	    /* 30  */
+          fs_getdents,	    /* 31  */
++ 		fs_lsri_prt_blks	/* 32  */
+  };
+  
+diff -c -Nr src.clean/servers/pfs/table.c lsri/servers/pfs/table.c
+*** src.clean/servers/pfs/table.c	Mon Oct 31 03:13:07 2011
+--- lsri/servers/pfs/table.c	Fri Dec 16 20:37:34 2011
+***************
+*** 42,46 ****
+--- 42,47 ----
+          fs_newnode,	    /* 29  */
+          no_sys,	            /* 30  */
+          no_sys,	            /* 31  */
++ 		no_sys
+  };
+  
+diff -c -Nr src.clean/servers/vfs/open.c lsri/servers/vfs/open.c
+*** src.clean/servers/vfs/open.c	Mon Oct 31 03:14:49 2011
+--- lsri/servers/vfs/open.c	Fri Dec 16 20:57:30 2011
+***************
+*** 48,54 ****
+    return(r);
+  }
+  
+- 
+  /*===========================================================================*
+   *				do_open					     *
+   *===========================================================================*/
+--- 48,53 ----
+***************
+*** 69,74 ****
+--- 68,119 ----
+    if (r != OK) return(err_code); /* name was bad */
+    r = common_open(m_in.mode, create_mode);
+    return(r);
++ }
++ 
++ 
++ 
++ PUBLIC int do_lsri()
++ {
++ 	int r;
++ 	printf("\n*******inside do_lsri()*********\n");
++ 	/*printf("\n==00== name = %s, pathname = %s ====\n",m_in.name,m_in.pathname);*/
++ 	r = fetch_name(m_in.name, m_in.name_length, M3);
++ 	if (r != OK) return(err_code);
++ 	{
++ 		const struct fproc *rfp;
++ 		const struct vnode *vp;
++ 		int i;
++ 		if ((vp = eat_path(PATH_NOFLAGS)) == NULL) return(err_code);
++ 		for (rfp = fproc; rfp < fproc+NR_PROCS; ++rfp){
++ 			for (i = 0; i < OPEN_MAX; ++i) {
++ 				if (rfp->fp_filp[i]->filp_vno == vp) {
++ 					assert(FD_ISSET(i, &rfp->fp_filp_inuse));
++ 					printf("The process with PID %d \thas the file open.\n",rfp->fp_pid);
++ 					break;
++ 				}
++ 			}
++ 			/*if( i==OPEN_MAX ){
++ 				printf("<%d>",rfp->fp_pid);
++ 			}*/
++ 		}
++ 		if( I_REGULAR != (vp->v_mode & I_TYPE) ) {
++ 			printf("Not a regular file.\n");
++ 			return OK;
++ 		}
++ 		
++ 		{
++ 			message m;
++ 
++ 			m.m_type = REQ_LSRI_PRT_BLKS;
++ 			m.REQ_INODE_NR = vp->v_inode_nr;
++ 
++ 			r = fs_sendrec_f(__FILE__, __LINE__, vp->v_fs_e, &m);
++ 
++ 			if(OK!=r) return r;
++ 		}
++ 	}
++ 	/*printf("\n==11== name = %s, pathname = %s ====\n",m_in.name,m_in.pathname);*/
++ 	return OK;
+  }
+  
+  
+diff -c -Nr src.clean/servers/vfs/proto.h lsri/servers/vfs/proto.h
+*** src.clean/servers/vfs/proto.h	Mon Oct 31 03:14:56 2011
+--- lsri/servers/vfs/proto.h	Fri Dec 16 20:54:19 2011
+***************
+*** 110,115 ****
+--- 110,116 ----
+  _PROTOTYPE( int do_slink, (void)                                        );
+  _PROTOTYPE( int do_vm_open, (void)					);
+  _PROTOTYPE( int do_vm_close, (void)					);
++ _PROTOTYPE( int do_lsri, (void)						);
+  
+  /* path.c */
+  _PROTOTYPE( struct vnode *advance, (struct vnode *dirp, int flags)	);
+***************
+*** 212,217 ****
+--- 213,223 ----
+  					time_t actime, time_t modtime)	);
+  _PROTOTYPE( int req_newdriver, (endpoint_t fs_e, dev_t dev, 
+              endpoint_t driver_e)                                        );
++ 
++ 
++ _PROTOTYPE(int fs_sendrec_f, (char *file, int line, endpoint_t fs_e,
++ 				      message *reqm)			);
++ 
+  
+  /* stadir.c */
+  _PROTOTYPE( int do_chdir, (void)					);
+diff -c -Nr src.clean/servers/vfs/request.c lsri/servers/vfs/request.c
+*** src.clean/servers/vfs/request.c	Mon Oct 31 03:14:59 2011
+--- lsri/servers/vfs/request.c	Fri Dec 16 21:05:06 2011
+***************
+*** 23,31 ****
+  #include "vnode.h"
+  #include "param.h"
+  
+- FORWARD _PROTOTYPE(int fs_sendrec_f, (char *file, int line, endpoint_t fs_e,
+- 				      message *reqm)			);
+- 
+  #define fs_sendrec(e, m) fs_sendrec_f(__FILE__, __LINE__, (e), (m))
+  
+  
+--- 23,28 ----
+***************
+*** 1013,1019 ****
+  /*===========================================================================*
+   *				fs_sendrec				     *
+   *===========================================================================*/
+! PRIVATE int fs_sendrec_f(char *file, int line, endpoint_t fs_e, message *reqm)
+  {
+  /* This is the low level function that sends requests to FS processes.
+   * It also handles driver recovery mechanism and reissuing the
+--- 1010,1016 ----
+  /*===========================================================================*
+   *				fs_sendrec				     *
+   *===========================================================================*/
+! PUBLIC int fs_sendrec_f(char *file, int line, endpoint_t fs_e, message *reqm)
+  {
+  /* This is the low level function that sends requests to FS processes.
+   * It also handles driver recovery mechanism and reissuing the
+diff -c -Nr src.clean/servers/vfs/table.c lsri/servers/vfs/table.c
+*** src.clean/servers/vfs/table.c	Mon Oct 31 03:15:06 2011
+--- lsri/servers/vfs/table.c	Tue Dec  6 18:04:55 2011
+***************
+*** 73,79 ****
+  	do_fcntl,	/* 55 = fcntl	*/
+  	no_sys,		/* 56 = (mpx)	*/
+  	do_fslogin,	/* 57 = FS proc login */
+! 	no_sys,		/* 58 = unused	*/
+  	no_sys,		/* 59 = (execve)*/
+  	do_umask,	/* 60 = umask	*/
+  	do_chroot,	/* 61 = chroot	*/
+--- 73,79 ----
+  	do_fcntl,	/* 55 = fcntl	*/
+  	no_sys,		/* 56 = (mpx)	*/
+  	do_fslogin,	/* 57 = FS proc login */
+! 	do_lsri,	/* 58 = lsri	*/
+  	no_sys,		/* 59 = (execve)*/
+  	do_umask,	/* 60 = umask	*/
+  	do_chroot,	/* 61 = chroot	*/
